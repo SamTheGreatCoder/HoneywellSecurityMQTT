@@ -1,7 +1,7 @@
 #include "digitalDecoder.h"
 #include "analogDecoder.h"
 #include "mqtt.h"
-#include "mqtt_config.h"
+//#include "mqtt_config.h"
 
 #include <rtl-sdr.h>
 
@@ -10,23 +10,58 @@
 #include <csignal>
 #include <unistd.h>
 #include <sys/time.h>
+#include <cstdlib> // For std::getenv
+#include <string>
 
+//class Mqtt {
+//public:
+    //Mqtt(const std::string& clientId, const std::string& host, int port, const std::string& username, const std::string& password, const std::string& topic, const std::string& status)
+        //: clientId(clientId), host(host), port(port), username(username), password(password), topic(topic), status(status) {}
 
-// Init MQTT, including will in case of disconnection
-// TODO: Will doesn't seem to be working with HA as expected
-Mqtt mqtt = Mqtt("sensors345", MQTT_HOST, MQTT_PORT, MQTT_USERNAME, MQTT_PASSWORD, "/security/sensors345/rx_status", "FAILED");
-DigitalDecoder dDecoder(mqtt);
-AnalogDecoder aDecoder;
+    //void connect() {
+        // Implementation of the connect method
+    //}
 
+//private:
+    //std::string clientId;
+    //std::string host;
+    //int port;
+    //std::string username;
+    //std::string password;
+    //std::string topic;
+    //std::string status;
+//};
+
+DigitalDecoder* dDecoder = nullptr; // Declare as a pointer
 float magLut[0x10000];
 
 void alarmHandler(int signal)
 {
-    dDecoder.setRxGood(false);
+    if (dDecoder) {
+        dDecoder->setRxGood(false);
+    }
 }
 
 int main()
 {
+
+    const char* mqttHost = std::getenv("MQTT_HOST");
+    const char* mqttPort = std::getenv("MQTT_PORT");
+    const char* mqttUsername = std::getenv("MQTT_USERNAME");
+    const char* mqttPassword = std::getenv("MQTT_PASSWORD");
+
+    if (!mqttHost || !mqttPort || !mqttUsername || !mqttPassword) {
+        std::cerr << "One or more environment variables are not set." << std::endl;
+        return 1;
+    }
+
+    int port = std::stoi(mqttPort);
+
+    Mqtt mqtt("sensors345", mqttHost, port, mqttUsername, mqttPassword, "/security/sensors345/rx_status", "FAILED");
+    dDecoder = new DigitalDecoder(mqtt); // Initialize here
+    //DigitalDecoder dDecoder(mqtt);
+    AnalogDecoder aDecoder;
+
     //
     // Open the device
     //
@@ -64,7 +99,10 @@ int main()
         return -1;
     }
     
-    if(rtlsdr_set_tuner_gain(dev, 350) < 0)
+    const char* gainEnv = std::getenv("RTLSDR_GAIN");
+    int gain = gainEnv ? std::stoi(gainEnv) : 350; // Default to 350 if not set
+
+    if(rtlsdr_set_tuner_gain(dev, gain) < 0)
     {
         std::cout << "Failed to set gain" << std::endl;
         return -1;
@@ -104,7 +142,8 @@ int main()
     // Common Receive
     //
     
-    aDecoder.setCallback([&](char data){dDecoder.handleData(data);});
+    //aDecoder.setCallback(& { dDecoder->handleData(data); });
+    aDecoder.setCallback([&](char data){dDecoder->handleData(data);});
     
     //
     // Async Receive
@@ -128,7 +167,8 @@ int main()
     std::signal(SIGALRM, alarmHandler);
   
     // Initialize RX state to good
-    dDecoder.setRxGood(true);
+    //dDecoder.setRxGood(true);
+    dDecoder->setRxGood(true);
     const int err = rtlsdr_read_async(dev, cb, &aDecoder, 0, 0);
     std::cout << "Read Async returned " << err << std::endl;
    
@@ -160,6 +200,7 @@ int main()
     // Shut down
     //
     rtlsdr_close(dev);
+    delete dDecoder; // Clean up
     return 0;
 }
 
