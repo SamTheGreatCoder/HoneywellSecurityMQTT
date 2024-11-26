@@ -1,3 +1,6 @@
+## Fork notice: Portions of code differing from the original repository were written in assistance with an AI LLM. While the code has been checked and validated to work as intended, I am no expert and cannot guarantee the safety of this code for use in a high importance environment. Use at your own risk.
+## Archival notice: I'm no longer interested in using this software for my personal use, and have no intentions of maintaining it past this point.
+
 # HoneywellSecurityMQTT
 
 This project is based on jhaines0's HoneywellSecurity project but instead of being intended for integration with SmartThings, it is designed to report status via MQTT.  This allows it to easily be used with other systems such as Home Assistant.
